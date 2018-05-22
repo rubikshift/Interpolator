@@ -118,10 +118,14 @@
     <ClCompile Include="Function.cpp" />
     <ClCompile Include="Interpolator.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="matrix.cpp" />
+    <ClCompile Include="solvingmethods.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Function.h" />
     <ClInclude Include="Interpolator.h" />
+    <ClInclude Include="matrix.h" />
+    <ClInclude Include="solvingmethods.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

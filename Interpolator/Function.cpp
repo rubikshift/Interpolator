@@ -1,6 +1,10 @@
 #include <cmath>
 #include "Function.h"
 
+Function::Function()
+{
+}
+
 Function::Function(std::shared_ptr<Polynomial> p, double start, double end)
 {
 	splines.emplace_back(p, start, end);
@@ -20,12 +24,12 @@ double Function::operator()(double x) const
 		auto start = std::get<1>(f);
 		auto end = std::get<2>(f);
 
-		if (start != end && x >= start && x <= end)
+		if (start != end && (x < start || x > end))
 			continue;
 
 		double y = 0;
 		for (Polynomial::size_type i = 0; i < polynomial->size(); i++)
-			y += polynomial->at(i) * pow(x, polynomial->size() - i - 1);
+			y += polynomial->at(i) * pow(x - start, polynomial->size() - i - 1);
 		return y;
 	}
 	return NAN;

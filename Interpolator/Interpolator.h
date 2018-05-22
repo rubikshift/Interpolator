@@ -13,8 +13,8 @@ class Interpolator
 	public:
 		Interpolator();
 		Interpolator& loadData(std::string dataSetFileName);
-		Interpolator& choseInterpolationPoints(std::size_t points);
-		Interpolator& randomlyChooseInterpolationPoints(std::size_t points);
+		Interpolator& choseInterpolationParts(std::size_t parts);
+		Interpolator& randomlyChoseInterpolationParts(std::size_t parts);
 		Function lagrange();
 		Function spline();
 		const DataVector& getDataSet() const;

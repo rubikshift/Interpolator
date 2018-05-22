@@ -1,7 +1,12 @@
 #include <fstream>
 #include <locale>
 #include <algorithm>
+#include <cmath>
+#include <random>
 #include "Interpolator.h"
+
+#include "matrix.h"
+#include "solvingmethods.h"
 
 Interpolator::Interpolator()
 {
@@ -13,40 +18,78 @@ Interpolator& Interpolator::loadData(std::string dataSetFileName)
 
 	double x, y;
 
-	while (!input.eof())
-	{
-		input >> x;
-		input >> y;
+	while (input >> x >> y)
 		dataSet.emplace_back(x, y);
-	}
 
 	input.close();
 	return *this;
 }
 
-Interpolator& Interpolator::choseInterpolationPoints(std::size_t points)
+Interpolator& Interpolator::choseInterpolationParts(std::size_t parts)
 {
-	if (points < 2)
-		throw std::invalid_argument("Ilosc punktow musi byc wieksza od 1");
+	if (parts == 0)
+		throw std::invalid_argument("Ilosc przedzialow nie moze byc mniejsza rowna 0");
+	else if (parts + 1 > dataSet.size())
+		throw std::invalid_argument("Zbyt duza liczba przedzialow");
 
-	this->points = points;
-	interpolationSet.reserve(points);
+	interpolationSet.clear();
+
+	points = parts + 1;
 	std::size_t dx = dataSet.size() / points;
+	if (dataSet.size() != dx * points)
+		dx++;
 
 	for (DataVector::size_type i = 0; i < dataSet.size(); i += dx)
 		interpolationSet.emplace_back(dataSet[i]);
-
+	if (dataSet.size() != dx * points)
+	{
+		interpolationSet.pop_back();
+		interpolationSet.emplace_back(dataSet.back());
+	}
 	return *this;
 }
 
-Interpolator& Interpolator::randomlyChooseInterpolationPoints(std::size_t points)
+Interpolator& Interpolator::randomlyChoseInterpolationParts(std::size_t parts)
 {
-	if (points < 2)
-		throw std::invalid_argument("Ilosc punktow musi byc wieksza od 1");
+	if (parts == 0)
+		throw std::invalid_argument("Ilosc przedzialow nie moze byc mniejsza rowna 0");
+	else if (parts + 1 > dataSet.size())
+		throw std::invalid_argument("Zbyt duza liczba przedzialow");
 
-	auto xs = std::make_unique<int*>(new int[points]);
+	interpolationSet.clear();
 
-	this->points = points;
+	this->points = parts + 1;
+
+	auto xs = new int[points];
+
+	std::default_random_engine generator;
+	std::uniform_int_distribution<int> distribution(0, dataSet.size() - 1);
+	
+	int random = 0;
+	bool ok = false;
+	for (std::size_t i = 0; i < points; i++)
+	{
+		ok = false;
+		while (!ok & i > 0)
+		{
+			random = distribution(generator);
+			for (std::size_t j = 0; j < i; j++)
+			{
+				ok = false;
+				if (xs[j] == random)
+					break;
+				ok = true;
+			}
+		}
+		xs[i] = random;
+	}
+
+	std::sort(xs, xs + points);
+
+	for (std::size_t i = 0; i < points; i++)
+		interpolationSet.emplace_back(dataSet[xs[i]]);
+
+	delete xs;
 	return *this;
 }
 
@@ -81,7 +124,7 @@ Function Interpolator::lagrange()
 			a *= interpolationSet[i].second;
 		}
 
-		addPolynomials(fi, fi1);		
+		addPolynomials(fi, fi1);
 	}
 
 	return Function(move(fi));
@@ -89,10 +132,84 @@ Function Interpolator::lagrange()
 
 Function Interpolator::spline()
 {
-	auto fi = std::make_shared<Polynomial>(points);
-	for (std::size_t i = 0; i < points; i++)
-		fi->emplace_back(0);
-	return Function(move(fi));
+	const std::size_t equations = 4 * (points - 1);
+	auto matrix = std::make_shared<Matrix>(equations, equations, 0);
+	auto left = std::make_shared<Matrix>(equations, 1); // [d0 c0 b0 a0 d1 c1 b1 a1 .. di ci bi ai]^T
+
+	//hi = x(i+1) - xi
+	auto h = std::make_unique<Matrix>(points - 1, 1);
+	for (std::size_t i = 1; i < points; i++)
+		h->set(i - 1, interpolationSet[i].first - interpolationSet[i - 1].first);
+
+	//c0 = 0
+	matrix->set(1, 1, 1);
+	left->set(1, 0);
+
+	//ai = f(xi)
+	std::size_t helpIter = 0;
+	for (std::size_t i = 3; i < equations; i += 4)
+	{
+		matrix->set(i, i, 1);
+		left->set(i, interpolationSet[helpIter].second);
+		helpIter++;
+	}
+
+	//di * 6hi + 2ci - 2c(i+1) = 0
+	helpIter = 0;
+	for (std::size_t i = 0; i < equations; i += 4)
+	{
+		matrix->set(i, i, 6 * h->at(helpIter));	//di * 6hi 
+		matrix->set(i, i + 1, 2);				//2ci
+		if (i + 5 < equations)
+			matrix->set(i, i + 5, -2);			//-2c(i+1)
+		left->set(i, 0);
+		helpIter++;
+	}
+
+	//di * hi^3 + ci * hi^2 + bi * hi + ai = f(x(i+1))
+	helpIter = 0;
+	for (std::size_t i = 2; i < equations; i += 4)
+	{
+		matrix->set(i, 0 + 4 * helpIter, pow(h->at(helpIter), 3));	//di * hi^3
+		matrix->set(i, 1 + 4 * helpIter, pow(h->at(helpIter), 2));	//ci * hi^2
+		matrix->set(i, 2 + 4 * helpIter, h->at(helpIter));			//bi * hi
+		matrix->set(i, 3 + 4 * helpIter, 1);						//ai
+		left->set(i, interpolationSet[helpIter + 1].second);
+		if (i == 2)
+			i--; //only for S0(x) this equation is 3rd, for Si(x) it is 2nd
+		helpIter++;
+	}
+
+	//di * 3hi^2 + ci * 2hi + bi - b(i+1) = 0; i > 0
+	helpIter = 0;
+	for (std::size_t i = 6; i < equations; i += 4)
+	{
+		matrix->set(i, i - 6, 3*pow(h->at(helpIter), 2));	//di * 3hi^2 
+		matrix->set(i, i - 6 + 1, 2*h->at(helpIter));		//ci * 2hi
+		matrix->set(i, i - 6 + 2, 1);						//bi
+		matrix->set(i, i - 6 + 6, -1);						//- b(i+1)
+		left->set(i, 0);
+	}
+
+	auto x = std::make_shared<Matrix>(matrix->rows, left->cols, 1);
+	LUdecomposition(matrix, left, x);
+
+	Function f;
+	auto fi = std::make_shared<Polynomial>();
+	helpIter = 0;
+	for (std::size_t i = 0; i < equations; i++)
+	{
+		fi->emplace_back(x->at(i));
+
+		if (i % 4 == 3)
+		{
+			f.addSpline(move(fi), interpolationSet[helpIter].first, interpolationSet[helpIter + 1].first);
+			fi = std::make_shared<Polynomial>();
+			helpIter++;
+		}
+	}
+	return f;
+
 }
 
 const DataVector& Interpolator::getDataSet() const

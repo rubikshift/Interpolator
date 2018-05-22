@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
 	}
 
 	Interpolator interpolator;
-	interpolator.loadData(argv[1]).choseInterpolationPoints(4);
+	interpolator.loadData(argv[1]).choseInterpolationParts(5);
 	
 	{
 		auto lagrangeFunction = interpolator.lagrange();
@@ -30,6 +30,7 @@ int main(int argc, char* argv[])
 		output << "x; y" << std::endl;
 		for(auto const& p : dataSet)
 			output << p.first << "; " << lagrangeFunction(p.first) << std::endl;
+		output.close();
 	}
 
 	{
@@ -40,6 +41,7 @@ int main(int argc, char* argv[])
 		output << "x; y" << std::endl;
 		for (auto const& p : dataSet)
 			output << p.first << "; " << splineFunction(p.first) << std::endl;
+		output.close();
 	}
 	return 0;
 }
