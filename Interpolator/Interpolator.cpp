@@ -35,17 +35,15 @@ Interpolator& Interpolator::choseInterpolationParts(std::size_t parts)
 	interpolationSet.clear();
 
 	points = parts + 1;
-	std::size_t dx = dataSet.size() / points;
+	std::size_t dx = dataSet.size() / parts;
 	if (dataSet.size() != dx * points)
 		dx++;
 
 	for (DataVector::size_type i = 0; i < dataSet.size(); i += dx)
 		interpolationSet.emplace_back(dataSet[i]);
-	if (dataSet.size() != dx * points)
-	{
-		interpolationSet.pop_back();
+	if (dataSet.size() > dx * (parts-1))
 		interpolationSet.emplace_back(dataSet.back());
-	}
+
 	return *this;
 }
 

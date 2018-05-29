@@ -262,3 +262,4 @@ __pycache__/
 
 *.csv
 *.txt
+/Interpolator/MN3.zip
